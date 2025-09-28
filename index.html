@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Digital Detangler Dashboard</title>
+    <!-- 
+        CRITICAL FIX: Load Tailwind CSS via CDN. 
+        This is necessary because the environment doesn't run the PostCSS build step
+        that would normally process the @tailwind directives in src/index.css.
+    -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- Vite automatically injects the bundled styles and scripts -->
+</head>
+<body>
+    <div id="root"></div>
+    <script type="module" src="/src/index.jsx"></script>
+</body>
+</html>

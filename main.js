@@ -1,10 +1,12 @@
 // main.js (Enhanced)
 
 const { app, BrowserWindow, ipcMain } = require('electron');
-const path = require('path');
+const si = require('systeminformation');const path = require('path');
 const activeWindow = require('active-win');
 const collectWifiInfo = require('./collectors/wifiInfo'); 
 const collectSystemLoad = require('./collectors/systemLoad'); // Import the systemLoad collector
+const collectRunningProcesses = require('./collectors/runningProcesses');
+const registerPrivacyHandler = require('./handlers/privacyHandler');
 
 // Simple flag to check if we're in development
 const isDev = process.env.NODE_ENV === 'development';
@@ -59,6 +61,44 @@ function updateProcessHistory(newAppName) {
 // 2. IPC HANDLERS
 // =========================================================================
 
+ipcMain.handle('collector:networkMetrics', async () => {
+  try {
+    // Get network stats using systeminformation
+    const stats = await si.networkStats();
+    const defaultInterface = stats.find(iface => iface.iface === 'Wi-Fi' || iface.iface === 'Ethernet' || iface.iface.startsWith('eth') || iface.iface.startsWith('en'));
+    
+    if (!defaultInterface) {
+      throw new Error('No active network interface found');
+    }
+    
+    // Calculate bandwidth in Mbps
+    const bandwidthMbps = defaultInterface.speed || 100; // Default to 100Mbps if speed is not available
+    
+    // Get latency using ping
+    let latencyMs = 50; // Default latency
+    try {
+      const pingData = await si.inetLatency('8.8.8.8');
+      latencyMs = pingData;
+    } catch (e) {
+      console.warn('Could not measure latency, using default:', e.message);
+    }
+    
+    return {
+      success: true,
+      latencyMs,
+      bandwidthMbps,
+      packetLossPct: 0 // Not directly available, default to 0
+    };
+  } catch (e) {
+    console.error("Failed to get network metrics:", e);
+    return { 
+      success: false,
+      latencyMs: -1,
+      bandwidthMbps: 0,
+      packetLossPct: 100 
+    };
+  }
+});
 ipcMain.handle('collector:pingTest', async () => {
     return `Pong! Response from Main Process at ${new Date().toLocaleTimeString()}`;
 });
@@ -168,6 +208,16 @@ ipcMain.handle('collector:systemLoad', async () => {
     }
 });
 
+// Add this with your other IPC handlers
+ipcMain.handle('collector:runningProcesses', async () => {
+  try {
+    return await collectRunningProcesses();
+  } catch (error) {
+    console.error('Process collection error:', error);
+    return null;
+  }
+});
+
 // =========================================================================
 // 4. WINDOW SETUP (Remains the same)
 // =========================================================================
@@ -194,7 +244,10 @@ function createWindow() {
     }
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+    registerPrivacyHandler();  // Register privacy handler
+    createWindow();
+});
 
 app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') {

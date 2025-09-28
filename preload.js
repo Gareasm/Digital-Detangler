@@ -1,12 +1,17 @@
+// preload.js
+
 const { contextBridge, ipcRenderer } = require('electron');
 
-// Expose protected methods that allow the renderer process to use
-// the ipcRenderer without exposing the entire object
-contextBridge.exposeInMainWorld('electronAPI', {
-  // Method that matches what your App.jsx expects
-  invoke: (channel, ...args) => ipcRenderer.invoke(channel, ...args),
-  
-  // Specific methods (alternative approach)
-  getActiveWindow: () => ipcRenderer.invoke('collector:activeWindow'),
-  pingTest: () => ipcRenderer.invoke('collector:pingTest'),
-});
+const api = {
+  invoke: (channel, data) => {
+   // Only allow specific channels to be invoked
+    // 🛑 ADD THE NEW CHANNEL HERE 🛑
+    const validChannels = ['collector:activeWindow', 'collector:pingTest', 'collector:wifiInfo', 'collector:getHistory']; 
+    if (validChannels.includes(channel)) {
+      return ipcRenderer.invoke(channel, data);
+    }
+    return Promise.reject(new Error(`Invalid IPC channel: ${channel}`));
+  },
+};
+
+contextBridge.exposeInMainWorld('electronAPI', api);

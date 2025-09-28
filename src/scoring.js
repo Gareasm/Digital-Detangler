@@ -12,6 +12,12 @@ export function calculateFocusScore({ contextSwitchesPerHour, socialMediaPct, wo
   return (contextScore * 0.4 + socialScore * 0.3 + workScore * 0.3).toFixed(1);
 }
 
+export function calculateLoadScore({cpuLoad, ramLoad}){
+    const cpuScore = mapToScore(cpuLoad, 0, 100);
+    const ramScore = mapToScore(ramLoad, 0, 100);
+    return (cpuScore * 0.5 + ramScore * 0.5).toFixed(1);
+}
+
 export function calculatePrivacyScore({ openPorts, wifiSecure, riskyApps }) {
   const portsScore = mapToScore(openPorts, 2, 10);
   const wifiScore  = wifiSecure ? 10 : 0;

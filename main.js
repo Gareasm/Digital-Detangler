@@ -4,6 +4,7 @@ const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
 const activeWindow = require('active-win');
 const collectWifiInfo = require('./collectors/wifiInfo'); 
+const collectSystemLoad = require('./collectors/systemLoad'); // Import the systemLoad collector
 
 // Simple flag to check if we're in development
 const isDev = process.env.NODE_ENV === 'development';
@@ -158,6 +159,14 @@ ipcMain.handle('collector:getHistory', async () => {
     return []; // Return empty array if no data
 });
 
+ipcMain.handle('collector:systemLoad', async () => {
+    try {
+        return await collectSystemLoad();
+    } catch (error) {
+        console.error('System load collection error:', error);
+        return null;
+    }
+});
 
 // =========================================================================
 // 4. WINDOW SETUP (Remains the same)

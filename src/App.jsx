@@ -9,6 +9,14 @@ import {
   Tooltip,
   Legend,
 } from 'chart.js';
+import ScoreBar from "./ScoreBar";
+import {
+  calculateFocusScore,
+  calculatePrivacyScore,
+  calculateLoadScore,
+  calculateNetworkScore,
+  calculateOverallScore
+} from "./scoring";
 
 // Register Chart.js components
 ChartJS.register(CategoryScale, LinearScale, BarElement, Title, Tooltip, Legend);
@@ -136,15 +144,76 @@ const UsageBarGraph = ({ appHistory }) => {
   );
 };
 
+// Move ReportCard to be a proper component
+const ReportCard = () => {
+  const focus = parseFloat(calculateFocusScore({ contextSwitchesPerHour: 12, socialMediaPct: 25, workPct: 55 }));
+  const privacy = parseFloat(calculatePrivacyScore({ openPorts: 5, wifiSecure: true, riskyApps: [] }));
+  const network = parseFloat(calculateNetworkScore({ latencyMs: 80, packetLossPct: 1, bandwidthMbps: 30 }));
+  const systemload = parseFloat(calculateLoadScore({ cpuLoad: 10, ramLoad: 65 }));
+  const overall = parseFloat(calculateOverallScore(focus, privacy, network));
+
+  return (
+    <div className="bg-gray-800 p-4 rounded-lg">
+      <h3 className="text-white text-sm font-medium mb-4">System Health Report</h3>
+      <div className="space-y-3 text-sm font-medium font-mono">
+        <ScoreBar label="Focus" score={focus} />
+        <ScoreBar label="Privacy" score={privacy} />
+        <ScoreBar label="Network" score={network} />
+        <ScoreBar label="System Load" score={systemload} />
+        <div className="border-t border-gray-700 my-3"></div>
+        <ScoreBar label="Overall" score={overall} />
+      </div>
+    </div>
+  );
+};
+
+// Add this new component before the Dashboard component
+const SystemLoad = ({ cpuLoad, ramLoad }) => {
+  console.log('Rendering SystemLoad with:', { cpuLoad, ramLoad });
+  return (
+    <div className="bg-gray-800 p-4 rounded-lg">
+      <h3 className="text-white text-sm font-medium mb-4">System Resources</h3>
+      <div className="space-y-3">
+        <div>
+          <div className="flex justify-between text-sm text-gray-400 mb-1">
+            <span>CPU Usage</span>
+            <span>{cpuLoad.toFixed(1)}%</span>
+          </div>
+          <div className="h-2 bg-gray-700 rounded-full">
+            <div 
+              className="h-full bg-blue-500 rounded-full"
+              style={{ width: `${cpuLoad}%` }}
+            />
+          </div>
+        </div>
+        <div>
+          <div className="flex justify-between text-sm text-gray-400 mb-1">
+            <span>RAM Usage</span>
+            <span>{ramLoad.toFixed(1)}%</span>
+          </div>
+          <div className="h-2 bg-gray-700 rounded-full">
+            <div 
+              className="h-full bg-green-500 rounded-full"
+              style={{ width: `${ramLoad}%` }}
+            />
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+};
+
 // Main Dashboard Component
 const Dashboard = () => {
   const [activeWindow, setActiveWindow] = useState({ title: 'Loading...', app: 'Loading...' });
   const [appHistory, setAppHistory] = useState([
-    { app: "App1", totalMinutes: 30 },
-    { app: "App2", totalMinutes: 45 },
-    { app: "App3", totalMinutes: 20 },
+    { app: "Chrome", totalMinutes: 45 },
+    { app: "VS Code", totalMinutes: 120 },
+    { app: "Slack", totalMinutes: 30 },
+    { app: "Terminal", totalMinutes: 25 }
   ]);
   const [wifiInfo, setWifiInfo] = useState({ ssid: 'Checking...', quality: 0, success: false });
+  const [systemLoad, setSystemLoad] = useState({ cpuLoad: 0, ramLoad: 0 });
 
   const fetchAppHistory = async () => {
     if (window.electronAPI && window.electronAPI.invoke) {
@@ -205,6 +274,23 @@ const Dashboard = () => {
     }
   };
 
+  const fetchSystemLoad = async () => {
+    if (window.electronAPI && window.electronAPI.invoke) {
+      try {
+        console.log('Fetching system load...');
+        const data = await window.electronAPI.invoke('collector:systemLoad');
+        console.log('Received system load data:', data);
+        if (data) {
+          setSystemLoad(data);
+        } else {
+          console.warn('Received null system load data');
+        }
+      } catch (e) {
+        console.error("Error fetching system load:", e);
+      }
+    }
+  };
+
   const testConnection = async () => {
     if (window.electronAPI && window.electronAPI.pingTest) {
       try {
@@ -224,11 +310,13 @@ const Dashboard = () => {
     fetchActiveWindowData();
     fetchAppHistory();
     fetchWifiData();
+    fetchSystemLoad();
 
     const intervalId = setInterval(() => {
       fetchActiveWindowData();
       fetchAppHistory();
       fetchWifiData();
+      fetchSystemLoad();
     }, 1000);
 
     return () => clearInterval(intervalId);
@@ -261,20 +349,16 @@ const Dashboard = () => {
             </div>
           </div>
 
-          <div className="mb-4">
-            <button
-              onClick={testConnection}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded transition-colors"
-            >
-              Test Electron Connection
-            </button>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-            <ScoreCard title="Focus Score" score="85%" color="green" />
-            <ScoreCard title="Productivity" score="72%" color="blue" />
-            <ScoreCard title="Screen Time" score="6.2h" color="yellow" />
-            <ScoreCard title="Distractions" score="23" color="red" />
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-6">
+            <div className="lg:col-span-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <ScoreCard title="Focus Score" score="85%" color="green" />
+                <ScoreCard title="Productivity" score="72%" color="blue" />
+                <ScoreCard title="Screen Time" score="6.2h" color="yellow" />
+                <ScoreCard title="Distractions" score="23" color="red" />
+              </div>
+            </div>
+            <ReportCard />
           </div>
 
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 flex-1">
@@ -298,6 +382,7 @@ const Dashboard = () => {
 
           <ProcessTimeLog appHistory={appHistory} />
           <UsageBarGraph appHistory={appHistory} />
+          <SystemLoad cpuLoad={systemLoad.cpuLoad} ramLoad={systemLoad.ramLoad} />
         </div>
       </div>
     </div>

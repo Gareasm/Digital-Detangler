@@ -6,7 +6,7 @@ const api = {
   invoke: (channel, data) => {
    // Only allow specific channels to be invoked
     // 🛑 ADD THE NEW CHANNEL HERE 🛑
-    const validChannels = ['collector:activeWindow', 'collector:pingTest', 'collector:wifiInfo', 'collector:getHistory']; 
+    const validChannels = ['collector:activeWindow', 'collector:pingTest', 'collector:wifiInfo', 'collector:getHistory', 'collector:systemLoad']; 
     if (validChannels.includes(channel)) {
       return ipcRenderer.invoke(channel, data);
     }

@@ -46,6 +46,21 @@ function updateProcessHistory(newAppName) {
         processHistory[previousAppName] = (processHistory[previousAppName] || 0) + timeSpent;
         
         console.log(`[Tracker] Logged ${timeSpent}ms for: ${previousAppName}`);
+        
+        // Update context switch history for focus score
+        try {
+            const window = BrowserWindow.getAllWindows()[0];
+            if (window && window.webContents) {
+                window.webContents.send('context-switch', {
+                    timestamp: now,
+                    fromApp: previousAppName,
+                    toApp: newAppName,
+                    timeSpent: timeSpent
+                });
+            }
+        } catch (e) {
+            console.error('Error sending context switch event:', e);
+        }
     }
 
     // 2. Update the current active app tracking data
@@ -63,24 +78,37 @@ function updateProcessHistory(newAppName) {
 
 ipcMain.handle('collector:networkMetrics', async () => {
   try {
-    // Get network stats using systeminformation
-    const stats = await si.networkStats();
-    const defaultInterface = stats.find(iface => iface.iface === 'Wi-Fi' || iface.iface === 'Ethernet' || iface.iface.startsWith('eth') || iface.iface.startsWith('en'));
+    // Initialize default values
+    let bandwidthMbps = 100; // Default bandwidth
+    let latencyMs = 50; // Default latency
+    let defaultInterface = null;
     
-    if (!defaultInterface) {
-      throw new Error('No active network interface found');
+    try {
+      // Try to get network stats
+      const stats = await si.networkStats();
+      defaultInterface = stats.find(iface => 
+        iface.iface === 'Wi-Fi' || 
+        iface.iface === 'Ethernet' || 
+        iface.iface.startsWith('eth') || 
+        iface.iface.startsWith('en')
+      );
+      
+      // If we found an interface, use its speed
+      if (defaultInterface && defaultInterface.speed) {
+        bandwidthMbps = defaultInterface.speed;
+      }
+    } catch (e) {
+      console.warn('Error getting network stats, using defaults:', e.message);
     }
     
-    // Calculate bandwidth in Mbps
-    const bandwidthMbps = defaultInterface.speed || 100; // Default to 100Mbps if speed is not available
-    
-    // Get latency using ping
-    let latencyMs = 50; // Default latency
-    try {
-      const pingData = await si.inetLatency('8.8.8.8');
-      latencyMs = pingData;
-    } catch (e) {
-      console.warn('Could not measure latency, using default:', e.message);
+    // Try to get latency if we have an active interface
+    if (defaultInterface) {
+      try {
+        const pingData = await si.inetLatency('8.8.8.8');
+        latencyMs = pingData;
+      } catch (e) {
+        console.warn('Could not measure latency, using default:', e.message);
+      }
     }
     
     return {
@@ -226,7 +254,7 @@ function createWindow() {
     // ... (Your BrowserWindow code)
     const mainWindow = new BrowserWindow({
         width: 800,
-        height: 800,
+        height: 700,
         resizable: false,
         webPreferences: {
             preload: path.join(__dirname, 'preload.js'),

@@ -357,10 +357,61 @@ const Dashboard = () => {
   const [appStartTime, setAppStartTime] = useState(Date.now());
   const [contextSwitchHistory, setContextSwitchHistory] = useState([]);
 
-  // Reset productive time every 10 minutes to only track recent activity
+  // Track screen time
+  const [startTime] = useState(Date.now());
+  
+  // Update screen time every second
+  useEffect(() => {
+    const updateScreenTime = () => {
+      const currentTime = Date.now();
+      const totalSeconds = Math.floor((currentTime - startTime) / 1000);
+      const hours = Math.floor(totalSeconds / 3600);
+      const minutes = Math.floor((totalSeconds % 3600) / 60);
+      const seconds = totalSeconds % 60;
+      
+      // Format as Hr:min:sec with leading zeros
+      const formattedTime = [
+        hours.toString().padStart(2, '0'),
+        minutes.toString().padStart(2, '0'),
+        seconds.toString().padStart(2, '0')
+      ].join(':');
+      
+      setScreenTime(formattedTime);
+    };
+    
+    // Update immediately and then every second
+    updateScreenTime();
+    const intervalId = setInterval(updateScreenTime, 1000);
+    
+    return () => clearInterval(intervalId);
+  }, [startTime]);
+  
+  // Listen for context switch events from main process
+  useEffect(() => {
+    const handleContextSwitch = (event, data) => {
+      console.log(`Context switch from ${data.fromApp} to ${data.toApp} after ${data.timeSpent}ms`);
+      
+      // Add the switch time to history
+      setContextSwitchHistory(prev => {
+        const tenMinutesAgo = Date.now() - (10 * 60 * 1000);
+        const recentSwitches = prev.filter(time => time > tenMinutesAgo);
+        return [...recentSwitches, data.timestamp];
+      });
+    };
+
+    // Add event listener
+    window.electronAPI?.on('context-switch', handleContextSwitch);
+    
+    // Clean up
+    return () => {
+      window.electronAPI?.removeListener('context-switch', handleContextSwitch);
+    };
+  }, []);
+  
+  // Reset context switch history every 10 minutes
   useEffect(() => {
     const interval = setInterval(() => {
-      setProductiveTime(0);
+      console.log('Resetting context switch history');
       setContextSwitchHistory([]);
     }, 10 * 60 * 1000); // 10 minutes
     
@@ -401,28 +452,20 @@ const Dashboard = () => {
     return isProductive;
   };
 
-  // Calculate focus score based on context switches and productive time
+  // Calculate focus score based on app switches in the last 10 minutes
   const calculateFocusScore = () => {
     const tenMinutesAgo = Date.now() - (10 * 60 * 1000);
-    const recentSwitches = contextSwitchHistory.filter(switchTime => switchTime > tenMinutesAgo).length;
-    const totalTime = 10 * 60 * 1000; // 10 minutes in ms
-    const productivePercentage = Math.min(1, productiveTime / totalTime);
+    const recentSwitches = contextSwitchHistory.filter(time => time > tenMinutesAgo).length;
     
-    // Start with a base score of 100
+    // Start with a perfect score of 100
     let score = 100;
     
-    // Penalize for context switches (up to -50 points)
-    // Each switch costs 5 points, max 10 switches (50 points)
-    const switchPenalty = Math.min(50, recentSwitches * 5);
-    score -= switchPenalty;
+    // Deduct 10 points for each app switch, up to 10 switches (max -100 points)
+    const penalty = Math.min(100, recentSwitches * 10);
+    score -= penalty;
     
-    // Reward for productive time (more productive time = higher score)
-    // Up to 30 points based on productive percentage
-    const productiveBonus = productivePercentage * 30;
-    score = Math.min(100, score + productiveBonus);
-    
-    // Ensure score is between 0 and 100
-    return Math.max(0, Math.min(100, Math.round(score)));
+    // Ensure score doesn't go below 0
+    return Math.max(0, score);
   };
 
   const fetchAppHistory = async () => {
@@ -600,7 +643,7 @@ const Dashboard = () => {
       fetchProcessStats();
       fetchPrivacyInfo();
       fetchNetworkMetrics();
-    }, 10000); // Increased to 10 seconds to reduce load
+    }, 2000); // Increased to 10 seconds to reduce load
 
     // Clean up interval on component unmount
     return () => {

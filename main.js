@@ -9,15 +9,15 @@ app.commandLine.appendSwitch('disable-gpu');
 
 function createWindow() {
   const mainWindow = new BrowserWindow({
-    width: 1200,
+    width: 800,
     height: 800,
+    resizable: false,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
     },
   });
-  mainWindow.isResizable = false;
   mainWindow.setMenuBarVisibility(false);
 
   // Load the app
